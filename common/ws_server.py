@@ -1,10 +1,10 @@
-'''
+"""
 Author: zengbaocheng
 Date: 2025-02-21 16:26:34
 LastEditors: zengbaocheng
 LastEditTime: 2025-02-21 16:55:56
 Desc:
-'''
+"""
 import asyncio
 import json
 import uuid
@@ -107,7 +107,7 @@ async def main(server):
     screen_size = await rpc_method_request.get_screen_size(server)
     print(f"Screen size: {screen_size}")
     await sleep(5)
-    screen_size = await rpc_method_request.get_screen_size(server)
+    screen_size = await rpc_method_request.get_position(server, element_data_list=[])
     print(f"Screen size: {screen_size}")
 
 
