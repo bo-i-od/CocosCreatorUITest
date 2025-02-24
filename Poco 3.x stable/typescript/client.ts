@@ -17,9 +17,9 @@ export default class WSClient extends Component {
     onLoad() {
         this.registerRpcHandler("getScreenSize", this.getScreenSize.bind(this))
         this.registerRpcHandler("test", this.test.bind(this))
-        this.startConnection();
-        
+        this.startConnection();        
     }
+
     // 传参加法
     private test(param){
         let args = param[0];
@@ -28,10 +28,10 @@ export default class WSClient extends Component {
         console.error(kwargs);
         return Number(kwargs.a) + Number(kwargs.b)
     }
+
     // 获取分辨率
-    private getScreenSize(params: {}) {
+    private getScreenSize() {
         return JSON.stringify(screen.resolution);
-        // 这里添加实际的血量更新逻辑
     }
 
     startConnection() {
