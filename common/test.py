@@ -1,15 +1,20 @@
-from common import rpc_method_request
+from common.base_page import BasePage
 from common.ws_server import rpc_server, sleep
 from configs.element_data import ElementsData
 
 
 @rpc_server(port=5101)
 async def main(server):
-    await rpc_method_request.custom_command(server, command_list=["setCamera Canvas>Camera"])
-    position = await rpc_method_request.get_position(server, [ElementsData.Test.button1, ElementsData.Test.button])
+    bp = BasePage(server=server)
+    await bp.initialize()
+    await bp.custom_command("setCamera Canvas>Camera")
+    position = await bp.get_position_list(element_data_list=[ElementsData.Test.button1, ElementsData.Test.button])
     print(f"position: {position}")
+    # bp.click_position_base(position=position[1][1])
+    position = await bp.get_position(element_data=ElementsData.Test.toggle)
+    # bp.click_position_base(position=position)
     await sleep(5)
-    screen_size = await rpc_method_request.get_screen_size(server)
+    screen_size = await bp.get_screen_size()
     print(f"Screen size: {screen_size}")
 
 

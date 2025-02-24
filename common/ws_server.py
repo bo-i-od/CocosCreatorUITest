@@ -1,20 +1,39 @@
-"""
-Author: zengbaocheng
-Date: 2025-02-21 16:26:34
-LastEditors: zengbaocheng
-LastEditTime: 2025-02-21 16:55:56
-Desc:
-"""
 import asyncio
 import json
 import uuid
 import websockets
-
+from colorama import Fore, Style, init
 from common import rpc_method_request
+init(autoreset=True)
+COLOR_MAPPING = {
+    'log': Style.RESET_ALL,
+    'error': Fore.RED,
+    'warn': Fore.YELLOW,
+    'info': Fore.BLUE,
+    'debug': Fore.CYAN
+}
 
 
+# 处理CocosCreator的console输出
+# 目前是按照类型打印
 def handle_msg(msg):
-    print(msg)
+    msg_type = msg.get('type', 'log')
+    data = msg.get('data', [])
+
+    # 获取对应颜色，默认为重置样式
+    color = COLOR_MAPPING.get(msg_type, Style.RESET_ALL)
+
+    for item in data:
+        try:
+            # 尝试解析JSON数据
+            parsed = json.loads(item)
+            formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            # 如果不是JSON字符串，直接转换为字符串
+            formatted = str(item)
+
+        # 打印带颜色的消息
+        print(f"{color}[{msg_type.upper()}] {formatted}")
 
 
 class RPCServer:

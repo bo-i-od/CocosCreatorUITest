@@ -20,6 +20,7 @@ export default class WSClient extends Component {
     onLoad() {
         this.addRpcMethods();
         this.startConnection();
+        this.transmitConsole();
         
     }
 
@@ -430,6 +431,11 @@ export default class WSClient extends Component {
         this.socket.onopen = () => {
             // 每次连接后清空uuid映射map
             this.idToNode.clear();
+            console.log(1);
+            console.warn(2);
+            console.error(3);
+            console.debug(4);
+            console.info(5);
             // this.scheduleHeartbeat();
             // this.socket.send("<----TypeScript->Python---->已连接");
         };
@@ -548,6 +554,51 @@ export default class WSClient extends Component {
           return String(err); // 处理数字、对象等
         }
       }
+
+    private transmitConsole(){
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info,
+            debug: console.debug,
+        };
+        console.log = (...args: any[]) => {
+            originalConsole.log.apply(console, args);
+            if (this.socket.readyState === WebSocket.OPEN) {
+                let msg = this.formatMessage("0", { type: 'log', data: args });
+                this.socket.send(msg);
+            }
+        };
+        console.error = (...args: any[]) => {
+            originalConsole.error.apply(console, args);
+            if (this.socket.readyState === WebSocket.OPEN) {
+                let msg = this.formatMessage("0", { type: 'error', data: args });
+                this.socket.send(msg);
+            }
+        };
+        console.warn = (...args: any[]) => {
+            originalConsole.warn.apply(console, args);
+            if (this.socket.readyState === WebSocket.OPEN) {
+                let msg = this.formatMessage("0", { type: 'warn', data: args });
+                this.socket.send(msg);
+            }
+        };
+        console.info = (...args: any[]) => {
+            originalConsole.info.apply(console, args);
+            if (this.socket.readyState === WebSocket.OPEN) {
+                let msg = this.formatMessage("0", { type: 'info', data: args });
+                this.socket.send(msg);
+            }
+        };
+        console.debug = (...args: any[]) => {
+            originalConsole.debug.apply(console, args);
+            if (this.socket.readyState === WebSocket.OPEN) {
+                let msg = this.formatMessage("0", { type: 'debug', data: args });
+                this.socket.send(msg);
+            }
+        };
+    }
       
 
     onDestroy() {

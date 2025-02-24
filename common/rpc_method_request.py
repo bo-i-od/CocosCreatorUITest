@@ -9,7 +9,8 @@ async def get_position(server: RPCServer, element_data_list: list):
     return await server.call("getPosition", element_data_list)
 
 
-async def get_position_by_id(server: RPCServer, id_list: list, offspring_path: str, anchor_point: list, locator_camera: str):
+async def get_position_by_id(server: RPCServer, id_list: list, offspring_path: str,
+                             anchor_point: list, locator_camera: str):
     return await server.call("getPositionByID", id_list, offspring_path, anchor_point, locator_camera)
 
 
