@@ -125,6 +125,7 @@ export class Locate {
         let cur: number = 0;
 
         let targetNode: Node = this.getNodeByID(id, idToNode);
+        console.log("targetNode name:", targetNode.name);
         if (targetNode == null)
         {
             return nodeArray;
@@ -159,13 +160,14 @@ export class Locate {
 
     public static getNodeByID(id: string, idToNode: Map<string, Node>)
     {
-        if(!(id in idToNode)){
+        if(!idToNode.has(id)){
             return null;
         }
-        if(idToNode[id].activeInHierarchy){
+        const node: Node = idToNode.get(id);
+        if(!node.activeInHierarchy){
             return null;
         }
-        return idToNode[id];
+        return node;
         
     }
 

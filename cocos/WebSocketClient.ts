@@ -87,6 +87,7 @@ export default class WSClient extends Component {
     }
 
     private getPositionByID(params){
+
         const idArray: string[] = params[0];
         const offspringPath: string = params[1];
         const anchorPoint: number[] = params[2];
@@ -431,11 +432,6 @@ export default class WSClient extends Component {
         this.socket.onopen = () => {
             // 每次连接后清空uuid映射map
             this.idToNode.clear();
-            console.log(1);
-            console.warn(2);
-            console.error(3);
-            console.debug(4);
-            console.info(5);
             // this.scheduleHeartbeat();
             // this.socket.send("<----TypeScript->Python---->已连接");
         };
@@ -555,7 +551,7 @@ export default class WSClient extends Component {
         }
       }
 
-    private transmitConsole(){
+    private transmitConsole() {
         const originalConsole = {
             log: console.log,
             error: console.error,
@@ -563,41 +559,37 @@ export default class WSClient extends Component {
             info: console.info,
             debug: console.debug,
         };
-        console.log = (...args: any[]) => {
-            originalConsole.log.apply(console, args);
-            if (this.socket.readyState === WebSocket.OPEN) {
-                let msg = this.formatMessage("0", { type: 'log', data: args });
-                this.socket.send(msg);
+    
+        // 通用日志处理函数
+        const createHandler = (type: string) => (...args: any[]) => {
+            originalConsole[type].apply(console, args);  // 保持原始控制台输出
+            if (this.socket.readyState != WebSocket.OPEN) {
+                return;
             }
+            // 将参数转换为字符串并用空格连接
+            const message = args.map(arg => {
+                try {
+                    return typeof arg === 'object' 
+                        ? JSON.stringify(arg, null, 0)  // 紧凑模式
+                        : String(arg);
+                } catch {
+                    return '[Circular]';
+                }
+            }).join(' ');  // 用单个空格连接
+            
+            const msg = this.formatMessage("0", { 
+                type: type,
+                data: message 
+            });
+            this.socket.send(msg);
         };
-        console.error = (...args: any[]) => {
-            originalConsole.error.apply(console, args);
-            if (this.socket.readyState === WebSocket.OPEN) {
-                let msg = this.formatMessage("0", { type: 'error', data: args });
-                this.socket.send(msg);
-            }
-        };
-        console.warn = (...args: any[]) => {
-            originalConsole.warn.apply(console, args);
-            if (this.socket.readyState === WebSocket.OPEN) {
-                let msg = this.formatMessage("0", { type: 'warn', data: args });
-                this.socket.send(msg);
-            }
-        };
-        console.info = (...args: any[]) => {
-            originalConsole.info.apply(console, args);
-            if (this.socket.readyState === WebSocket.OPEN) {
-                let msg = this.formatMessage("0", { type: 'info', data: args });
-                this.socket.send(msg);
-            }
-        };
-        console.debug = (...args: any[]) => {
-            originalConsole.debug.apply(console, args);
-            if (this.socket.readyState === WebSocket.OPEN) {
-                let msg = this.formatMessage("0", { type: 'debug', data: args });
-                this.socket.send(msg);
-            }
-        };
+    
+        // 重写所有控制台方法
+        console.log = createHandler('log');
+        console.error = createHandler('error');
+        console.warn = createHandler('warn');
+        console.info = createHandler('info');
+        console.debug = createHandler('debug');
     }
       
 

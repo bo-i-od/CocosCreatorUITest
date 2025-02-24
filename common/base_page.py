@@ -9,12 +9,12 @@ import asyncio
 
 
 class BasePage:
-    def __init__(self, server, dev=None):
+    def __init__(self, server, window_title, dev=None):
         self.server = server
         self.dev = dev
         if self.dev is None:
             # self.dev = connect_device("Windows:///?title_re=.*Cocos Simulator.*")
-            self.dev = connect_device("Windows:///?title_re=.*Cocos Creator - NewProject.*")
+            self.dev = connect_device(f"Windows:///?title_re=.*{window_title}.*")
             # self.dev = connect_device("Windows:///?title_re=.*Cocos Creator.*")
         self.screen_w = None
         self.screen_h = None

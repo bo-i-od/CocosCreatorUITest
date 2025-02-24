@@ -18,22 +18,22 @@ COLOR_MAPPING = {
 # 目前是按照类型打印
 def handle_msg(msg):
     msg_type = msg.get('type', 'log')
-    data = msg.get('data', [])
+    data = msg.get('data', '')  # 默认空字符串而非列表
 
     # 获取对应颜色，默认为重置样式
     color = COLOR_MAPPING.get(msg_type, Style.RESET_ALL)
 
-    for item in data:
-        try:
-            # 尝试解析JSON数据
-            parsed = json.loads(item)
-            formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
-        except (json.JSONDecodeError, TypeError):
-            # 如果不是JSON字符串，直接转换为字符串
-            formatted = str(item)
+    # 处理整个数据字符串
+    try:
+        # 尝试解析为JSON（例如传输的是对象或数组）
+        parsed = json.loads(data)
+        formatted = json.dumps(parsed, indent=2, ensure_ascii=False)
+    except (json.JSONDecodeError, TypeError):
+        # 否则直接使用原始字符串
+        formatted = data
 
-        # 打印带颜色的消息
-        print(f"{color}[{msg_type.upper()}] {formatted}")
+    # 打印带颜色的消息
+    print(f"{color}[{msg_type.upper()}] {formatted}")
 
 
 class RPCServer:
