@@ -1,5 +1,7 @@
+import os
 import random
 
+import cv2
 from airtest.core.api import connect_device
 from common import rpc_method_request
 from configs.jump_data import JumpData
@@ -20,6 +22,13 @@ class BasePage:
         self.screen_h = None
         self.scale_factor_w = None
         self.scale_factor_h = None
+
+        # 控制截图
+        self.is_record = False
+
+        # 获取父目录
+        file_path = os.path.join(os.path.dirname(__file__))
+        self.root_dir = os.path.abspath(os.path.dirname(file_path))
 
     async def initialize(self):
         self.screen_w, self.screen_h = await self.get_screen_size()  # 获取屏幕尺寸
@@ -521,7 +530,6 @@ class BasePage:
         if element_data:
             results = await self.get_name_list(element_data_list=[element_data], offspring_path=offspring_path)
             return results[0]
-
         # 输入element_data_list的情况，直接调用rpc
         element_data_copy_list = self.get_element_data_list(element_data_list, offspring_path)
         return await rpc_method_request.get_name(self.server, element_data_copy_list)
@@ -637,19 +645,28 @@ class BasePage:
     async def custom_command_list(self, cmd_list: list):
         await rpc_method_request.custom_command(self.server, cmd_list)
 
-    def click_position_base(self, position):
+    def correct_position(self, position):
+        position[0] = (1 - self.scale_factor_w) * 0.5 + position[0] * self.scale_factor_w
+        position[1] = 1 - self.scale_factor_h + self.scale_factor_h * position[1]
+
+    async def click_position_base(self, position):
         """函数功能简述
             点击position处
         参数:
             position[float, float]
         """
-        position[0] = (1 - self.scale_factor_w) * 0.5 + position[0] * self.scale_factor_w
-        position[1] = 1 - self.scale_factor_h + self.scale_factor_h * position[1]
+
+        self.correct_position(position=position)
         if not (0 <= position[0] <= 1) or not (0 <= position[1] <= 1):
             raise InvalidOperationError('Click position out of screen. pos={}'.format(repr(position)))
+        # 点击前进行截图保存
+        if self.is_record:
+            img = await self.get_full_screen_shot()
+            self.draw_circle(img, (position[0], position[1]))
+            self.save_img(img)
         self.dev.touch(position)
 
-    def click_position(self, position, ignore_set=None):
+    async def click_position(self, position, ignore_set=None):
         """函数功能简述
             点击position处
             点击前会清除一遍弹窗
@@ -657,8 +674,85 @@ class BasePage:
             position[float, float]
             ignore_set: 需要忽略清除的弹窗
         """
-        self.clear_popup(ignore_set)
-        self.click_position_base(position)
+        await self.clear_popup(ignore_set)
+        await self.click_position_base(position)
+    
+    async def press_position_base(self, position, duration: float = 2.0):
+        """函数功能简述
+            按压position位置duration秒
+
+        参数:
+            position[float, float]
+            duration: 按压时长（默认值为2s）
+         """
+        self.correct_position(position=position)
+        if not (0 <= position[0] <= 1) or not (0 <= position[1] <= 1):
+            raise InvalidOperationError('Click position out of screen. pos={}'.format(repr(position)))
+
+        # 点击前进行截图保存
+        if self.is_record:
+            img = await self.get_full_screen_shot()
+            self.draw_circle(img, (position[0], position[1]))
+            self.save_img(img)
+        self.dev.touch(position, duration)
+    
+    async def press_position(self, position, duration: float = 2.0, ignore_set=None):
+        """函数功能简述
+            按压position位置duration秒
+
+        参数:
+            uuid和element_data输入其中的一个
+            uuid: 元素id
+            element_data: 元素定位信息
+            offspring_path: 偏移路径
+            duration: 按压时长（默认值为2s）
+         """
+        await self.clear_popup(ignore_set)
+        await self.press_position_base(position, duration)
+
+    async def swipe(self, element_data: dict = None, uuid: str = None, point_start=None, point_end=None, t: float = 0.5,
+                    offspring_path="", anchor_point: list = None, locator_camera: str = "", ignore_set=None):
+        """函数功能简述
+            清除弹窗后滑动
+
+        参数:
+            uuid、element_data、point_start三个选择一个输入，uuid或element_data都是为了得到滑动起始点坐标
+            uuid: 元素id
+            element_data: 元素定位信息
+            point_start: 滑动起始点坐标
+            point_end: 滑动终止点坐标
+            t: 滑动时间
+            offspring_path: 偏移路径
+            ignore_set: 忽略的弹窗
+        """
+        await self.clear_popup(ignore_set)
+        if element_data or uuid:
+            point_start = await self.get_position(element_data=element_data, uuid=uuid, offspring_path=offspring_path,
+                                                  anchor_point=anchor_point, locator_camera=locator_camera)
+        await self.swipe_base(point_start=point_start, point_end=point_end, t=t)
+        
+    async def swipe_base(self, point_start=None, point_end=None, t: float = 0.5):
+        """函数功能简述
+            滑动
+
+        参数:
+            uuid、element_data、point_start三个选择一个输入，uuid或element_data都是为了得到滑动起始点坐标
+            uuid: 元素id
+            element_data: 元素定位信息
+            point_start: 滑动起始点坐标
+            point_end: 滑动终止点坐标
+            t: 滑动时间
+            offspring_path: 偏移路径
+        """
+        self.correct_position(position=point_start)
+        self.correct_position(position=point_end)
+        # 点击前进行截图保存
+        if self.is_record:
+            img = await self.get_full_screen_shot()
+            self.draw_circle(img, (point_start[0], point_start[1]))
+            self.draw_circle(img, (point_end[0], point_end[1]))
+            self.save_img(img)
+        self.dev.swipe(p1=point_start, p2=point_end, duration=t)
 
     async def click_element(self, uuid: str = None, element_data: dict = None, offspring_path: str = "",
                             anchor_point: list = None, locator_camera: str = "", ignore_set=None):
@@ -666,8 +760,8 @@ class BasePage:
             定位元素后取元素的position值
 
         参数:
-            object_id和element_data输入其中的一个
-            object_id: 元素id
+            uuid和element_data输入其中的一个
+            uuid: 元素id
             element_data: 元素定位信息
             offspring_path: 偏移路径
             ignore_set: 需要忽略清除的弹窗
@@ -676,12 +770,12 @@ class BasePage:
         返回:
             position_list有且只有一个元素时，返回[float, float]
         """
-        self.clear_popup(ignore_set)
+        await self.clear_popup(ignore_set)
         position_list = await self.get_position_list(element_data=element_data, uuid=uuid,
                                                      offspring_path=offspring_path, anchor_point=anchor_point,
                                                      locator_camera=locator_camera)
         self.is_single_element(position_list)
-        self.click_position_base(position_list[0])
+        await self.click_position_base(position_list[0])
         return position_list[0]
 
     async def click_element_safe(self, uuid: str = None, element_data: dict = None, offspring_path="",
@@ -691,8 +785,8 @@ class BasePage:
             不清除弹窗
 
         参数:
-            object_id和element_data选择一个输入
-            object_id: 元素id
+            uuid和element_data选择一个输入
+            uuid: 元素id
             element_data: 检测元素
             offspring_path: 偏移路径
         """
@@ -704,11 +798,11 @@ class BasePage:
             return
         try:
             r = random.randint(0, len(position_list) - 1)
-            self.click_position_base(position_list[r])
+            await self.click_position_base(position_list[r])
         except InvalidOperationError:
             pass
 
-    def clear_popup_once(self, ignore_set=None):
+    async def clear_popup_once(self, ignore_set=None):
         """函数功能简述
             清除弹窗一次
 
@@ -717,7 +811,7 @@ class BasePage:
         """
         if ignore_set is None:
             ignore_set = set()
-        panel_name_list = self.get_name_list(element_data_list=JumpData.panel_list)
+        panel_name_list = await self.get_name_list(element_data_list=JumpData.panel_list)
         panel_name_list = common_tools.merge_list(panel_name_list)
         # 弹窗=检测到的弹窗-忽略的弹窗
         pop_window_set = set(panel_name_list) & JumpData.pop_window_set - ignore_set
@@ -729,11 +823,11 @@ class BasePage:
             if "close_path" not in JumpData.panel_dict[panel_name]:
                 continue
             for close_element in JumpData.panel_dict[panel_name]["close_path"]:
-                self.click_element_safe(element_data=close_element)
-                self.sleep(1)
+                await self.click_element_safe(element_data=close_element)
+                await self.sleep(1)
         return False
 
-    def clear_popup(self, ignore_set=None):
+    async def clear_popup(self, ignore_set=None):
         """函数功能简述
             一直清弹窗直到没有弹窗
 
@@ -741,11 +835,11 @@ class BasePage:
             ignore_set: 忽略的弹窗{str, str, ……}
         """
         while True:
-            res = self.clear_popup_once(ignore_set)
+            res = await self.clear_popup_once(ignore_set)
             if res:
                 break
 
-    def go_home(self, cur_panel=None, target_panel=None):
+    async def go_home(self, cur_panel=None, target_panel=None):
         """函数功能简述
             回到主界面
 
@@ -756,40 +850,40 @@ class BasePage:
         at_home_flag = False
         while not at_home_flag:
             # 关闭一次除了HomePanel的所有面板
-            self.clear_panel_except_home()
-            self.sleep(0.5)
+            await self.clear_panel_except_home()
+            await self.sleep(0.5)
 
             # 在返回大厅过程中找到目标面板就直接返回
             at_target_panel_flag = False
             if target_panel:
-                at_target_panel_flag = self.exist(element_data=JumpData.panel_dict[target_panel]["element_data"])
+                at_target_panel_flag = await self.exist(element_data=JumpData.panel_dict[target_panel]["element_data"])
             if at_target_panel_flag:
                 return
 
             # 有HomePanel且没有cur_panel需要关闭时才判断停止
-            at_home_flag = self.exist(element_data=JumpData.element_data_home)
+            at_home_flag = await self.exist(element_data=JumpData.element_data_home)
             if cur_panel is not None:
-                at_home_flag = at_home_flag and not self.exist(
+                at_home_flag = at_home_flag and not await self.exist(
                     element_data=JumpData.panel_dict[cur_panel]["element_data"])
 
-    def clear_panel_except_home(self):
+    async def clear_panel_except_home(self):
         """函数功能简述
             关除了主界面的其它界面一次
         """
-        panel_name_list = self.get_name_list(element_data_list=JumpData.panel_list)
+        panel_name_list = await self.get_name_list(element_data_list=JumpData.panel_list)
         panel_name_list = common_tools.merge_list(panel_name_list)
         for panel_name in panel_name_list:
             if panel_name not in JumpData.panel_dict:
                 continue
-            self.clear_popup_once()
+            await self.clear_popup_once()
             if "close_path" not in JumpData.panel_dict[panel_name]:
                 continue
             for close_element in JumpData.panel_dict[panel_name]["close_path"]:
-                self.click_element_safe(element_data=close_element)
+                await self.click_element_safe(element_data=close_element)
             break
-        self.sleep(0.2)
+        await self.sleep(0.2)
 
-    def go_to_panel(self, panel):
+    async def go_to_panel(self, panel):
         """函数功能简述
             去指定面板
 
@@ -798,15 +892,235 @@ class BasePage:
         """
         panel_dict = JumpData.panel_dict[panel]
         # 在目标面板就直接返回
-        if self.exist(element_data=panel_dict["element_data"]):
+        if await self.exist(element_data=panel_dict["element_data"]):
             return
 
         # 回大厅
-        self.go_home(target_panel=panel)
+        await self.go_home(target_panel=panel)
 
         # 按照JumpData.panel_dict中记录的路径尝试点击，直到到目标面板
-        while not self.exist(element_data=panel_dict["element_data"]):
-            self.clear_popup_once()
+        while not await self.exist(element_data=panel_dict["element_data"]):
+            await self.clear_popup_once()
             for element_data in panel_dict["open_path"]:
-                self.click_element_safe(element_data=element_data)
-                self.sleep(0.5)
+                await self.click_element_safe(element_data=element_data)
+                await self.sleep(0.5)
+
+    # 对指定元素进行截取
+    async def get_element_shot(self, element_data: dict = None, uuid: str = None, offspring_path: str = "",
+                               anchor_point: list = None, locator_camera: str = ""):
+        """函数功能简述
+            指定元素截图
+
+        参数:
+            uuid: 元素id
+            element_data: 元素定位信息
+            offspring_path: 偏移路径
+
+        返回值:
+            Opencv格式图像
+        """
+        ui_x, ui_y = await self.get_position(element_data=element_data, uuid=uuid, offspring_path=offspring_path,
+                                             anchor_point=anchor_point, locator_camera=locator_camera)
+        ui_w, ui_h = await self.get_size(element_data=element_data, uuid=uuid, offspring_path=offspring_path)
+        ui_x, ui_y = int(ui_x * self.screen_w), int(ui_y * self.screen_h)
+        ui_w, ui_h = int(ui_w * self.screen_w), int(ui_h * self.screen_h)
+        img = await self.get_screen_shot(ui_x, ui_y, ui_w, ui_h)
+        return img
+
+    async def get_full_screen_shot(self):
+        """函数功能简述
+            截取整个屏幕
+
+        返回值:
+            Opencv格式图像
+        """
+        img = await self.get_screen_shot(self.screen_w * 0.5, self.screen_h * 0.5, self.screen_w, self.screen_h)
+        return img
+
+    async def get_screen_shot(self, x, y, w, h):
+        """函数功能简述
+            截取屏幕
+
+        参数:
+            x,y为坐标
+            w,h为宽高
+
+        返回值:
+            Opencv格式图像
+        """
+        img_b64encode, fmt = await rpc_method_request.screen_shot(self.server, x, y, w, h)
+        # if fmt.endswith('.deflate'):
+        #     # fmt = fmt[:-len('.deflate')]
+        #     imgdata = base64.b64decode(img_b64encode)
+        #     imgdata = zlib.decompress(imgdata)
+        #     img_b64encode = base64.b64encode(imgdata)
+        # img_b64decode = base64.b64decode(img_b64encode)  # base64解码
+        # img_array = np.frombuffer(img_b64decode, np.uint8)  # 转换np序列
+        # img = cv2.imdecode(img_array, cv2.COLOR_BGR2RGB)  # 转换Opencv格式
+        # return img
+        return 1
+
+    def save_img(self, img, img_name=""):
+        """函数功能简述
+            保存截图到report文件夹
+
+        参数:
+            img: Opencv格式图像
+            img_name: 图片名（不填则以数字命名）
+
+        返回值:
+            Opencv格式图像
+        """
+        path = f"{self.root_dir}/report"  # 输入文件夹地址
+
+        # 不存在就创建
+        if not os.path.exists(path):
+            os.makedirs(path, exist_ok=True)
+        if img_name == "":
+            num_png = len(os.listdir(path))  # 读入文件夹,统计文件夹中的文件个数
+            cur = num_png
+            img_name = f'/{cur}.jpg'
+        cv2.imwrite(path + img_name, img)
+
+    def draw_circle(self, img, center_coordinates):
+        """函数功能简述
+            在img图像上以center_coordinates为圆心画圆
+        参数:
+            img: 输入图片
+            center_coordinates: 圆心
+        """
+        center_coordinates = (int(center_coordinates[0] * self.screen_w), int(center_coordinates[1] * self.screen_h))
+        # 定义圆形的半径
+        radius0 = 20
+        radius1 = 30
+        # 定义圆形的颜色 (B, G, R)
+        color = (0, 0, 255)
+        # 定义圆形的厚度; -1表示圆形将会被填充，默认值是1
+        thickness = 2
+        # 在图片上画一个圆形
+        cv2.circle(img, center_coordinates, 5, color, -1)
+        cv2.circle(img, center_coordinates, radius0, color, thickness)
+        cv2.circle(img, center_coordinates, radius1, color, thickness)
+
+    async def click_a_until_b_appear(self, element_data_a: dict, element_data_b: dict,
+                                     interval: float = 1, ignore_set=None):
+        """函数功能简述
+            在element_data_b元素出现之前，一直点击element_data_a元素
+
+        参数:
+            element_data_a: 点击元素
+            element_data_a: 检测元素
+            interval: 点击间隔（默认0.5s）
+            ignore_set: 需要忽略清除的弹窗
+        """
+        while not await self.exist(element_data=element_data_b):
+            await self.click_element_safe(element_data=element_data_a)
+            await self.clear_popup(ignore_set=ignore_set)
+            await self.sleep(interval)
+
+    async def click_a_until_b_appear_list(self, perform_list: list):
+        """函数功能简述
+            第一次循环element_data_a=perform_list[0], element_data_b=perform_list[1]
+            第一次循环element_data_a=perform_list[1], element_data_b=perform_list[2]
+            以此类推进行click_a_until_b_appear
+
+        参数:
+            perform_list: element_data组成的list
+        """
+        cur = 0
+        while cur < len(perform_list) - 1:
+            # print(perform_list[cur], perform_list[cur + 1])
+            await self.click_a_until_b_appear(perform_list[cur], perform_list[cur + 1])
+            cur += 1
+
+    async def click_a_until_b_disappear(self, element_data_a: dict, element_data_b: dict,
+                                        interval: float = 0.5, ignore_set=None):
+        """函数功能简述
+            在element_data_b元素消失之前，一直点击element_data_a元素
+            首先会等待element_data_b元素出现
+
+        参数:
+            element_data_a: 点击元素
+            element_data_a: 检测元素
+            interval: 点击间隔（默认0.5s）
+            ignore_set: 需要忽略清除的弹窗
+        """
+        await self.wait_for_appear(element_data=element_data_b, is_click=False)
+        while await self.exist(element_data=element_data_b):
+            await self.clear_popup(ignore_set=ignore_set)
+            await self.click_element_safe(element_data=element_data_a)
+            await self.sleep(interval)
+
+    async def click_until_disappear(self, element_data: dict = None, interval: float = 1, ignore_set=None):
+        """函数功能简述
+            在element_data元素消失之前，一直点击element_data元素
+
+        参数:
+            element_data: 点击元素和检测元素
+            interval: 点击间隔（默认0.5s）
+            ignore_set: 需要忽略清除的弹窗
+        """
+        await self.click_a_until_b_disappear(element_data_a=element_data, element_data_b=element_data,
+                                             interval=interval, ignore_set=ignore_set)
+
+    async def wait_for_appear(self, element_data: dict = None, element_data_list=None, is_click: bool = False,
+                              interval: float = 0.5, timeout=120, ignore_set=None):
+        """函数功能简述
+            等待元素出现
+
+        参数:
+            element_data和element_data_list输入其中一个
+            element_data: 检测元素
+            element_data_list: 检测元素列表，检测到其中一个就算检测到
+            is_click: True的话出现后点击
+            interval: 检测间隔（默认0.5s）
+            timeout: 超时次数（默认120次检测）超时后会跳出循环
+            ignore_set: 需要忽略清除的弹窗
+        """
+
+        # element_data转为element_data_list
+        if element_data:
+            return await self.wait_for_appear(element_data_list=[element_data], is_click=is_click,
+                                              interval=interval, timeout=timeout, ignore_set=ignore_set)
+
+        cur = 0
+        position_list = []
+        position_list_merge = []
+        while cur < timeout:
+            await self.clear_popup(ignore_set=ignore_set)
+            position_list = await self.get_position_list(element_data_list=element_data_list)
+            position_list_merge = common_tools.merge_list(position_list)
+            if position_list_merge:
+                break
+            await self.sleep(interval)
+            cur += interval
+
+        # 没找到直接返回
+        if not position_list_merge:
+            return position_list
+
+        # 找到后不点击
+        if not is_click:
+            return position_list
+
+        # 找到后点击
+        await self.click_position(position_list_merge[0])
+        return position_list
+
+    async def wait_for_disappear(self, element_data: dict, interval: float = 0.5, timeout=120, ignore_set=None):
+        """函数功能简述
+            等待元素消失
+
+        参数:
+            element_data: 检测元素
+            interval: 检测间隔（默认0.5s）
+            timeout: 超时次数（默认120次检测）超时后会跳出循环
+            ignore_set: 需要忽略清除的弹窗
+        """
+        cur = 0
+        while cur < timeout:
+            if await self.exist(element_data=element_data):
+                break
+            await self.clear_popup_once(ignore_set=ignore_set)
+            await self.sleep(interval)
+            cur += 1

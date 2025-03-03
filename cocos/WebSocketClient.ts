@@ -577,7 +577,7 @@ export default class WSClient extends Component {
                 }
             }).join(' ');  // 用单个空格连接
             
-            const msg = this.formatMessage("0", { 
+            const msg = this.formatMessage("", { 
                 type: type,
                 data: message 
             });

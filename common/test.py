@@ -12,8 +12,12 @@ async def main(server):
     print(f"position: {position}")
     uuid = await bp.get_id(element_data=ElementsData.Test.button1)
     print(uuid)
+
     position = await bp.get_position(uuid=uuid)
     print(f"position: {position}")
+    # name = await bp.get_name(element_data=ElementsData.Test.button1)
+    # print(name)
+    await bp.click_until_disappear(element_data=ElementsData.Test.button1)
     # # bp.click_position_base(position=position[1][1])
     # position = await bp.get_position(element_data=ElementsData.Test.toggle)
     # # bp.click_position_base(position=position)

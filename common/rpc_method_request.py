@@ -39,7 +39,7 @@ async def set_text_by_id(server: RPCServer, id_list: list, offspring_path: str, 
 
 
 async def get_sprite_name(server: RPCServer, element_data_list: list):
-    return await server.call("geSpriteName", element_data_list)
+    return await server.call("getSpriteName", element_data_list)
 
 
 async def get_sprite_name_by_id(server: RPCServer, id_list: list, offspring_path: str):
@@ -47,7 +47,7 @@ async def get_sprite_name_by_id(server: RPCServer, id_list: list, offspring_path
 
 
 async def get_progress(server: RPCServer, element_data_list: list):
-    return await server.call("geProgress", element_data_list)
+    return await server.call("getProgress", element_data_list)
 
 
 async def get_progress_by_id(server: RPCServer, id_list: list, offspring_path: str):
@@ -55,7 +55,7 @@ async def get_progress_by_id(server: RPCServer, id_list: list, offspring_path: s
 
 
 async def get_toggle_is_checked(server: RPCServer, element_data_list: list):
-    return await server.call("geToggleIsChecked", element_data_list)
+    return await server.call("getToggleIsChecked", element_data_list)
 
 
 async def get_toggle_is_checked_by_id(server: RPCServer, id_list: list, offspring_path: str):
@@ -63,7 +63,7 @@ async def get_toggle_is_checked_by_id(server: RPCServer, id_list: list, offsprin
 
 
 async def get_name(server: RPCServer, element_data_list: list):
-    return await server.call("geName", element_data_list)
+    return await server.call("getName", element_data_list)
 
 
 async def get_name_by_id(server: RPCServer, id_list: list, offspring_path: str):
@@ -92,3 +92,7 @@ async def custom_command(server: RPCServer, command_list: list):
 
 async def command(server: RPCServer, command_list: list):
     return await server.call("command", command_list)
+
+
+async def screen_shot(server: RPCServer, x: int, y: int, w: int, h: int):
+    return await server.call("screenShot", x, y, w, h)

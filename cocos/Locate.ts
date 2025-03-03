@@ -125,7 +125,6 @@ export class Locate {
         let cur: number = 0;
 
         let targetNode: Node = this.getNodeByID(id, idToNode);
-        console.log("targetNode name:", targetNode.name);
         if (targetNode == null)
         {
             return nodeArray;

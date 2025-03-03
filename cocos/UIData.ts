@@ -148,6 +148,7 @@ export class UIData {
     public static getNameArray(nodeArray: Node[]){
         let nameArray: string[] = [];
         let cur: number = 0;
+
         while(cur < nodeArray.length){
             const node: Node = nodeArray[cur];
             nameArray.push(node.name);

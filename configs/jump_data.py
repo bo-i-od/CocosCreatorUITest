@@ -3,7 +3,7 @@ from configs.element_data import ElementsData
 
 class JumpData:
     element_data_home = ElementsData.HomePanel.HomePanel
-    panel_list = [ElementsData.Test.A, ElementsData.Test.B]
+    panel_list = [ElementsData.Test.A]
     # 弹窗名
     pop_window_set = {
         ""
