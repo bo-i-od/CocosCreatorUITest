@@ -84,7 +84,6 @@ export class UIData {
         let cur: number = 0;
         while(cur < nodeArray.length){
             const node: Node = nodeArray[cur];
-            let text: string = "";
             const componentText = this.getComponentText(node);
             if(componentText){
                 componentText.string = text;
