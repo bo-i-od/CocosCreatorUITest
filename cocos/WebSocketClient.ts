@@ -7,10 +7,12 @@ const { ccclass, property } = _decorator;
 export default class WSClient extends Component {
     private socket: WebSocket = null;
     private reconnectTimer: number = 0;
-    private baseDelay = 1000;
+    private baseDelay = 500;
     private cameraDefault: Camera;
     private rpcHandlers: { [key: string]: (params: any) => any} = {}; // RPC 方法注册表
     public idToNode: Map<string, Node> = new Map();
+    @property({ type: String})
+    public port:string = "5101";
     // 注册 RPC 方法
     registerRpcHandler(methodName: string, callback: (params: any) => any) {
         this.rpcHandlers[methodName] = callback;
@@ -21,7 +23,7 @@ export default class WSClient extends Component {
         this.addRpcMethods();
         this.startConnection();
         this.transmitConsole();
-        
+
     }
 
     private addRpcMethods(){
@@ -188,7 +190,7 @@ export default class WSClient extends Component {
         }
         return null;
     }
-    
+
     private setTextByID(params){
         const idArray: string[] = params[0];
         const offspringPath: string = params[1];
@@ -427,8 +429,7 @@ export default class WSClient extends Component {
 
     startConnection() {
         this.cleanup();
-        this.socket = new WebSocket("ws://localhost:5101");
-
+        this.socket = new WebSocket( `ws://localhost:${this.port}`);
         this.socket.onopen = () => {
             // 每次连接后清空uuid映射map
             this.idToNode.clear();
@@ -442,7 +443,6 @@ export default class WSClient extends Component {
         };
 
         this.socket.onclose = (ev) => {
-            console.log(`连接关闭: ${ev.reason}`);
             this.handleReconnect();
         };
 
@@ -461,13 +461,13 @@ export default class WSClient extends Component {
             const data = JSON.parse(msg.data);
             method = data.method;
             idAction = data.id;
-            params = data.params || {};            
+            params = data.params || {};
         } catch (err) {
             console.log("Received non-JSON message:", msg.data);
             response = this.formatResponseError(idAction, err);
             return response;
         }
-        
+
         // 检查方法是否存在
         if (!this.rpcHandlers.hasOwnProperty(method)) {
             response = this.formatResponseError(idAction, `Method '${method}' not found`);
@@ -559,7 +559,7 @@ export default class WSClient extends Component {
             info: console.info,
             debug: console.debug,
         };
-    
+
         // 通用日志处理函数
         const createHandler = (type: string) => (...args: any[]) => {
             originalConsole[type].apply(console, args);  // 保持原始控制台输出
@@ -569,21 +569,21 @@ export default class WSClient extends Component {
             // 将参数转换为字符串并用空格连接
             const message = args.map(arg => {
                 try {
-                    return typeof arg === 'object' 
+                    return typeof arg === 'object'
                         ? JSON.stringify(arg, null, 0)  // 紧凑模式
                         : String(arg);
                 } catch {
                     return '[Circular]';
                 }
             }).join(' ');  // 用单个空格连接
-            
-            const msg = this.formatMessage("", { 
+
+            const msg = this.formatMessage("", {
                 type: type,
-                data: message 
+                data: message
             });
             this.socket.send(msg);
         };
-    
+
         // 重写所有控制台方法
         console.log = createHandler('log');
         console.error = createHandler('error');
@@ -591,7 +591,7 @@ export default class WSClient extends Component {
         console.info = createHandler('info');
         console.debug = createHandler('debug');
     }
-      
+
 
     onDestroy() {
         this.cleanup();
