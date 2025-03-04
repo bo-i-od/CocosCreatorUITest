@@ -125,7 +125,7 @@ export class UIData {
         if(editBox){
             return editBox;
         }
-        const richText = node.getComponent(EditBox);
+        const richText = node.getComponent(RichText);
         if(richText){
             return richText;
         }

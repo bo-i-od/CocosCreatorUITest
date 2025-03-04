@@ -77,7 +77,7 @@ class BasePage:
         element_data_copy = element_data
         if offspring_path != "":
             element_data_copy = element_data.copy()
-            element_data_copy["locator"] = element_data_copy["locator"] + '>' + offspring_path
+            element_data_copy["locator"] = element_data_copy["locator"] + '/' + offspring_path
         return element_data_copy
 
     def get_element_data_list(self, element_data_list: list, offspring_path: str):

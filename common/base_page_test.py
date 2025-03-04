@@ -56,8 +56,8 @@ async def get_text_list_test(bp: BasePage):
     print(await bp.get_text_list(element_data_list=[ElementsData.Test.button1, ElementsData.Test.B], offspring_path="Label"))
     # print(await bp.get_parent_id(element_data=ElementsData.Test.B))
     uuid = await bp.get_id(element_data=ElementsData.Test.A)
-    print(await bp.get_text_list(uuid=uuid, offspring_path="Button2>Label"))
-    print(await bp.get_text_list(uuid_list=[uuid, uuid], offspring_path="Button2>Label"))
+    print(await bp.get_text_list(uuid=uuid, offspring_path="Button2/Label"))
+    print(await bp.get_text_list(uuid_list=[uuid, uuid], offspring_path="Button2/Label"))
 
 async def set_text_test(bp: BasePage):
     print(await bp.set_text(element_data=ElementsData.Test.button2, offspring_path="Label", text="ha"))
@@ -70,8 +70,8 @@ async def set_text_list_test(bp: BasePage):
     # print(await bp.set_text_list(element_data_list=[ElementsData.Test.button2, ElementsData.Test.B], offspring_path="Label", text="789"))
     # print(await bp.get_parent_id(element_data=ElementsData.Test.B))
     uuid = await bp.get_id(element_data=ElementsData.Test.A)
-    print(await bp.set_text_list(uuid=uuid, offspring_path="Button2>Label", text="101112"))
-    # print(await bp.set_text_list(uuid_list=[uuid, uuid], offspring_path="Button2>Label", text="131415"))
+    print(await bp.set_text_list(uuid=uuid, offspring_path="Button2/Label", text="101112"))
+    # print(await bp.set_text_list(uuid_list=[uuid, uuid], offspring_path="Button2/Label", text="131415"))
 
 
 async def get_sprite_name_test(bp: BasePage):
@@ -172,9 +172,9 @@ async def get_parent_id_list_test(bp: BasePage):
 async def main(server):
     bp = BasePage(window_title="Cocos Creator - NewProject", server=server)
     await bp.initialize()
-    await bp.custom_command("setCamera Canvas>Camera")
+    await bp.custom_command("setCamera Canvas/Camera")
 
-    # await get_screen_size_test(bp)
+    await get_screen_size_test(bp)
 
     # await exist_test(bp)
 
