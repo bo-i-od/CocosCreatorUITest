@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, screen, Camera } from 'cc';
+import { _decorator, Component, Node, screen, Camera, CCString } from 'cc';
 import { Locate } from './Locate';
 import { UIData } from './UIData';
 const { ccclass, property } = _decorator;
@@ -11,8 +11,8 @@ export default class WSClient extends Component {
     private cameraDefault: Camera;
     private rpcHandlers: { [key: string]: (params: any) => any} = {}; // RPC 方法注册表
     public idToNode: Map<string, Node> = new Map();
-    @property({ type: String})
-    public port:string = "5101";
+    @property
+    public port = "5101";
     // 注册 RPC 方法
     registerRpcHandler(methodName: string, callback: (params: any) => any) {
         this.rpcHandlers[methodName] = callback;
@@ -23,7 +23,6 @@ export default class WSClient extends Component {
         this.addRpcMethods();
         this.startConnection();
         this.transmitConsole();
-        
     }
 
     private addRpcMethods(){

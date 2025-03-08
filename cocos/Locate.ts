@@ -9,7 +9,7 @@ export class Locate {
     {
         let nodeArray: Node[] = [];
         nodeArray = this.getChildNodeArray(nodeArray);
-        let locatorArray: string[] = locator.split('/');
+        let locatorArray: string[] = locator.split('>');
         // 查找起始节点
         let rootNode: Node = find(locatorArray[0]);
         
@@ -131,7 +131,7 @@ export class Locate {
         }
         nodeArray.push(targetNode);
 
-        let locatorArray: string[] = offspringPath.split('/');
+        let locatorArray: string[] = offspringPath.split('>');
         // 没有locator就直接返回
         if(locatorArray.length == 1 && locatorArray[0] == "")
         {
