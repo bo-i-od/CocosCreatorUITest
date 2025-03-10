@@ -2,26 +2,26 @@ import os
 import random
 
 import cv2
-from airtest.core.api import connect_device
+
+
 from common import rpc_method_request
 from configs.jump_data import JumpData
 from error import *
 from tools import common_tools
 import asyncio
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
 
 
 class BasePage:
-    def __init__(self, server, window_title, dev=None):
+    def __init__(self, server):
         self.server = server
-        self.dev = dev
-        if self.dev is None:
-            # self.dev = connect_device("Windows:///?title_re=.*Cocos Simulator.*")
-            self.dev = connect_device(f"Windows:///?title_re=.*{window_title}.*")
-            # self.dev = connect_device("Windows:///?title_re=.*Cocos Creator.*")
         self.screen_w = None
         self.screen_h = None
-        self.scale_factor_w = None
-        self.scale_factor_h = None
 
         # 控制截图
         self.is_record = False
@@ -29,10 +29,19 @@ class BasePage:
         # 获取父目录
         file_path = os.path.join(os.path.dirname(__file__))
         self.root_dir = os.path.abspath(os.path.dirname(file_path))
+        self.driver = self.webdriver_init()
+        self.canvas = self.driver.find_element(By.ID, "GameCanvas")
 
-    async def initialize(self):
-        self.screen_w, self.screen_h = await self.get_screen_size()  # 获取屏幕尺寸
-        self.scale_factor_w, self.scale_factor_h = self.get_scale_factor()
+    def webdriver_init(self):
+        # "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\temp\chrome_profile"
+        # 配置 Chrome 调试参数
+        chrome_options = Options()
+        chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+        # 创建 Service 对象
+        service = ChromeService(ChromeDriverManager().install())
+        # 连接到已运行的浏览器实例
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        return driver
 
     @staticmethod
     async def sleep(t):
@@ -40,12 +49,6 @@ class BasePage:
 
     async def get_screen_size(self):
         return await rpc_method_request.get_screen_size(self.server)
-
-    def get_scale_factor(self):
-        resolution_w, resolution_h = self.dev.get_current_resolution()
-        scale_factor_w = self.screen_w / resolution_w
-        scale_factor_h = self.screen_h / resolution_h
-        return scale_factor_w, scale_factor_h
 
     # 判断列表是不是长度为1，不为1会报错
     @staticmethod
@@ -645,26 +648,10 @@ class BasePage:
     async def custom_command_list(self, cmd_list: list):
         await rpc_method_request.custom_command(self.server, cmd_list)
 
-    def correct_position(self, position):
-        position[0] = (1 - self.scale_factor_w) * 0.5 + position[0] * self.scale_factor_w
-        position[1] = 1 - self.scale_factor_h + self.scale_factor_h * position[1]
-
-    async def click_position_base(self, position):
-        """函数功能简述
-            点击position处
-        参数:
-            position[float, float]
-        """
-
-        self.correct_position(position=position)
-        if not (0 <= position[0] <= 1) or not (0 <= position[1] <= 1):
-            raise InvalidOperationError('Click position out of screen. pos={}'.format(repr(position)))
-        # 点击前进行截图保存
-        if self.is_record:
-            img = await self.get_full_screen_shot()
-            self.draw_circle(img, (position[0], position[1]))
-            self.save_img(img)
-        self.dev.touch(position)
+    def normalized_position_to_web_position(self, normalized_position):
+        offset_x = normalized_position[0] * self.canvas.size['width'] + self.canvas.location['x']
+        offset_y = normalized_position[1] * self.canvas.size['height']+ self.canvas.location['y']
+        return [offset_x, offset_y]
 
     async def click_position(self, position, ignore_set=None):
         """函数功能简述
@@ -675,7 +662,7 @@ class BasePage:
             ignore_set: 需要忽略清除的弹窗
         """
         await self.clear_popup(ignore_set)
-        await self.click_position_base(position)
+        await self.press_position_base(position, duration=0.1)
     
     async def press_position_base(self, position, duration: float = 2.0):
         """函数功能简述
@@ -685,7 +672,7 @@ class BasePage:
             position[float, float]
             duration: 按压时长（默认值为2s）
          """
-        self.correct_position(position=position)
+
         if not (0 <= position[0] <= 1) or not (0 <= position[1] <= 1):
             raise InvalidOperationError('Click position out of screen. pos={}'.format(repr(position)))
 
@@ -694,7 +681,42 @@ class BasePage:
             img = await self.get_full_screen_shot()
             self.draw_circle(img, (position[0], position[1]))
             self.save_img(img)
-        self.dev.touch(position, duration)
+        web_position = self.normalized_position_to_web_position(position)
+        long_press_script = """
+        function longPress(x, y, duration) {
+            const target = document.elementFromPoint(x, y);
+            if (!target) return;
+
+            // 创建并分派 mousedown 事件
+            const downEvent = new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                clientX: x,
+                clientY: y,
+                view: window
+            });
+            target.dispatchEvent(downEvent);
+
+            // 延迟触发 mouseup
+            setTimeout(() => {
+                const upEvent = new MouseEvent('mouseup', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: x,
+                    clientY: y,
+                    view: window
+                });
+                target.dispatchEvent(upEvent);
+            }, duration);
+        }
+
+        // 执行长按（参数：x坐标, y坐标, 持续时间ms）
+        longPress(arguments[0], arguments[1], arguments[2]);
+        """
+        # 调用示例：在坐标 (100, 200) 长按 2 秒
+        self.driver.execute_script(long_press_script, web_position[0], web_position[1], duration * 1000)
+        # 可选：等待操作完成
+        await self.sleep(duration)
     
     async def press_position(self, position, duration: float = 2.0, ignore_set=None):
         """函数功能简述
@@ -744,15 +766,75 @@ class BasePage:
             t: 滑动时间
             offspring_path: 偏移路径
         """
-        self.correct_position(position=point_start)
-        self.correct_position(position=point_end)
         # 点击前进行截图保存
         if self.is_record:
             img = await self.get_full_screen_shot()
             self.draw_circle(img, (point_start[0], point_start[1]))
             self.draw_circle(img, (point_end[0], point_end[1]))
             self.save_img(img)
-        self.dev.swipe(p1=point_start, p2=point_end, duration=t)
+        web_position_start = self.normalized_position_to_web_position(point_start)
+        web_position_end = self.normalized_position_to_web_position(point_end)
+        drag_script = """
+        function asyncDrag(startX, startY, endX, endY, duration) {
+            const startElem = document.elementFromPoint(startX, startY);
+            if (!startElem) return;
+
+            const downEvent = new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                clientX: startX,
+                clientY: startY,
+                view: window,
+                detail: 1,
+                buttons: 1
+            });
+            startElem.dispatchEvent(downEvent);
+
+            const steps = 10;
+            const stepX = (endX - startX) / steps;
+            const stepY = (endY - startY) / steps;
+            const stepDelay = duration / steps;
+
+            let currentX = startX;
+            let currentY = startY;
+
+            function dispatchMoveStep(i) {
+                if (i >= steps) {
+                    const upEvent = new MouseEvent('mouseup', {
+                        bubbles: true,
+                        cancelable: true,
+                        clientX: endX,
+                        clientY: endY,
+                        view: window
+                    });
+                    startElem.dispatchEvent(upEvent);
+                    return;
+                }
+
+                currentX += stepX;
+                currentY += stepY;
+                const moveEvent = new MouseEvent('mousemove', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: currentX,
+                    clientY: currentY,
+                    view: window,
+                    buttons: 1
+                });
+                startElem.dispatchEvent(moveEvent);
+
+                setTimeout(() => dispatchMoveStep(i + 1), stepDelay);
+            }
+
+            dispatchMoveStep(0);
+        }
+
+        const [startX, startY, endX, endY, duration] = arguments;
+        asyncDrag(startX, startY, endX, endY, duration);
+        """
+
+        # 调用示例：从 (100, 200) 滑动到 (300, 400)，耗时 1 秒
+        self.driver.execute_script(drag_script, web_position_start[0], web_position_start[1], web_position_end[0], web_position_end[1], t*1000)
 
     async def click_element(self, uuid: str = None, element_data: dict = None, offspring_path: str = "",
                             anchor_point: list = None, locator_camera: str = "", ignore_set=None):
@@ -775,7 +857,7 @@ class BasePage:
                                                      offspring_path=offspring_path, anchor_point=anchor_point,
                                                      locator_camera=locator_camera)
         self.is_single_element(position_list)
-        await self.click_position_base(position_list[0])
+        await self.press_position_base(position_list[0], duration=0.1)
         return position_list[0]
 
     async def click_element_safe(self, uuid: str = None, element_data: dict = None, offspring_path="",
@@ -798,7 +880,7 @@ class BasePage:
             return
         try:
             r = random.randint(0, len(position_list) - 1)
-            await self.click_position_base(position_list[r])
+            await self.press_position_base(position_list[r], duration=0.1)
         except InvalidOperationError:
             pass
 

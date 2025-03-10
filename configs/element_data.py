@@ -11,6 +11,7 @@ class ElementsData:
         Sprite = {"locator": "Canvas/Sprite"}
         ProgressBar = {"locator": "Canvas/ProgressBar"}
         Toggle = {"locator": "Canvas/Toggle"}
+        Slider = {"locator": "Canvas/Slider"}
 
     class HomePanel:
         HomePanel = {"locator": "Canvas/HomePanel"}
