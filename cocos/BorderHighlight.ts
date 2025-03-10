@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Input, EventMouse, UITransform, Vec3, v3, instantiate, input, Vec2, EventKeyboard, KeyCode, Rect, Sprite, Color, builtinResMgr, resources, SpriteFrame, Layers, assetManager, Texture2D } from 'cc';
+import { _decorator, Component, Node, Input, EventMouse, UITransform, Vec3, input, Vec2, EventKeyboard, KeyCode, Rect, Sprite, Color, SpriteFrame, Layers, Texture2D } from 'cc';
 const { ccclass, property } = _decorator;
 
 @ccclass('BorderHighlight')
@@ -95,7 +95,6 @@ export class BorderHighlight extends Component {
         // 获取点击位置（Vec2 转 Vec3）
         const screenPos = event.getLocation();
         const screenPosV3 = new Vec3(screenPos.x, screenPos.y, 0);
-        console.log("点击", screenPos);
         
         // 转换为 Canvas 坐标系下的 Vec3
         const worldPos = this.canvas.getComponent(UITransform)!.convertToNodeSpaceAR(screenPosV3);
@@ -195,11 +194,11 @@ export class BorderHighlight extends Component {
     // 递归检测节点
     private checkNodes(node: Node, clickedPos: Vec2, result: Node[]) {
         if (!node.active) return;
-        const uiTransform = node.getComponent(UITransform);
-        if (!uiTransform) return;
         node.children.forEach(child => {
             this.checkNodes(child, clickedPos, result); // 传递父节点坐标
         });
+        const uiTransform = node.getComponent(UITransform);
+        if (!uiTransform) return;
         if (node == this.canvas){
             return;
         }
@@ -239,10 +238,30 @@ export class BorderHighlight extends Component {
             toggle.enabled = enable;
         }
 
-        // 禁用 Toggle
+        // 禁用 EditBox
         const editBox = node.getComponent('cc.EditBox');
         if (editBox) {
             editBox.enabled = enable;
+        }
+
+        const pageView = node.getComponent('cc.PageView');
+        if (pageView) {
+            pageView.enabled = enable;
+        }
+
+        const scrollView = node.getComponent('cc.ScrollView');
+        if (scrollView) {
+            scrollView.enabled = enable;
+        }
+
+        const videoPlayer = node.getComponent('cc.VideoPlayer');
+        if (videoPlayer) {
+            videoPlayer.enabled = enable;
+        }
+
+        const webView = node.getComponent('cc.WebView');
+        if (webView) {
+            webView.enabled = enable;
         }
 
         // 递归处理子节点
