@@ -6,8 +6,10 @@ export class BorderHighlight extends Component {
     @property({ type: Node })
     public canvas: Node = null!; // 绑定Canvas节点
     private border: Node = null; // 边框预制体（需提前制作）
-    private lastHitNode: Node = null; // 上一次点击的节点列表
+    private lastHitNodes: Node[] = []; // 上一次点击的节点列表
+    private lastHitNode: Node = null; // 上一次点击的节点
     private isInUIMode: boolean = false; //是否可以点击高亮获取UI信息
+    private disabledMap: Map<Node, Component[]> = new Map();
 
     onLoad() {
         this.createBorder();
@@ -23,8 +25,6 @@ export class BorderHighlight extends Component {
     private createBorder(){
         this.border = new Node("Border");
         const borderTrans = this.border.addComponent(UITransform);
-        this.border.setParent(this.canvas);
-        this.border.setPosition(0, 0, 0);
         borderTrans.setAnchorPoint(0.5, 0.5); // 中心锚点
         borderTrans.setContentSize(0, 0);
 
@@ -38,7 +38,7 @@ export class BorderHighlight extends Component {
             // 生成纯白像素数据（每个像素 RGBA=255,255,255,255）
             const pixelData = new Uint8Array(4);
             pixelData.fill(0xFF); // 全部填充 255
-        
+
             // 写入像素数据
             texture.uploadData(pixelData);
             return texture;
@@ -78,16 +78,41 @@ export class BorderHighlight extends Component {
 
         // 关闭
         if(this.isInUIMode){
-            this.isInUIMode = false;
-            this.setDefaultUIEvents(this.canvas, true);
-            input.off(Input.EventType.MOUSE_DOWN, this.onMouseClick, this); 
+            this.quitUIMode();
             return;
         }
+        this.enterUIMode();
 
-        // 打开
+
+
+
+    }
+
+    private enterUIMode(){
         this.isInUIMode = true;
         this.setDefaultUIEvents(this.canvas, false);
-        input.on(Input.EventType.MOUSE_DOWN, this.onMouseClick, this); 
+        input.on(Input.EventType.MOUSE_DOWN, this.onMouseClick, this);
+    }
+
+    private quitUIMode(){
+        this.isInUIMode = false;
+        this.setDefaultUIEvents(this.canvas, true);
+        input.off(Input.EventType.MOUSE_DOWN, this.onMouseClick, this);
+    }
+
+    private compareHitNodes(nodesA: Node[], nodesB: Node[]){
+
+        if(nodesA.length != nodesB.length){
+            return false;
+        }
+        let cur = 0;
+        while(cur < nodesA.length){
+            if(nodesA[cur].uuid != nodesB[cur].uuid){
+                return false;
+            }
+            cur += 1;
+        }
+        return true;
     }
 
     // 点击事件处理
@@ -95,26 +120,35 @@ export class BorderHighlight extends Component {
         // 获取点击位置（Vec2 转 Vec3）
         const screenPos = event.getLocation();
         const screenPosV3 = new Vec3(screenPos.x, screenPos.y, 0);
-        
+
         // 转换为 Canvas 坐标系下的 Vec3
         const worldPos = this.canvas.getComponent(UITransform)!.convertToNodeSpaceAR(screenPosV3);
         const worldPosV2 = new Vec2(worldPos.x, worldPos.y);
         // 传递给 checkNodes 时保持 Vec3 类型
-        const hitNodes: Node[] = [];
+        let hitNodes: Node[] = [];
         this.checkNodes(this.canvas, worldPosV2, hitNodes);
-    
+        hitNodes = this.sortNodesByArea(hitNodes);
+
         // 移除旧边框
         this.clearBorder();
-    
+
         if (hitNodes.length == 0) {
             this.lastHitNode = null;
             return;
-        } 
+        }
+
+        const isSamePosition = this.compareHitNodes(this.lastHitNodes, hitNodes);
+
+
         // 判断是否同一位置点击
         let currentIndex = hitNodes.indexOf(this.lastHitNode) + 1;
+        if(!isSamePosition){
+            currentIndex = 0;
+        }
         if(currentIndex >= hitNodes.length){
             currentIndex = 0;
         }
+        this.lastHitNodes = hitNodes;
 
         // 保存当前节点列表
         this.lastHitNode = hitNodes[currentIndex];
@@ -126,21 +160,20 @@ export class BorderHighlight extends Component {
             elementData += `, "focus": (${this.lastHitNode.getComponent(UITransform).anchorX}, ${this.lastHitNode.getComponent(UITransform).anchorY})`;
         }
         elementData += `}`;
-        console.log(elementData);
-        console.log("节点附带组件：",this.lastHitNode.components);
-
-            
+        console.log(elementData,"\n",this.lastHitNode.components);
     }
 
     // 添加边框到指定节点
     private addBorderToNode(targetNode: Node) {
         // 改变边框位置
+        this.border.setParent(this.canvas.getChildByName("view"));
+        this.border.setPosition(0, 0, 0);
         const uiTransform = targetNode.getComponent(UITransform);
         const posX = targetNode.worldPosition.x + (0.5 - uiTransform.anchorX) * uiTransform.contentSize.x;
         const posY = targetNode.worldPosition.y + (0.5 - uiTransform.anchorY) * uiTransform.contentSize.y;
         const worldPosition = new Vec3(posX, posY, targetNode.worldPosition.z);
         this.border.setWorldPosition(worldPosition);
-        
+
         // 调整边框尺寸与目标节点一致
         const width = uiTransform.width;
         const height = uiTransform.height;
@@ -153,7 +186,7 @@ export class BorderHighlight extends Component {
             const part = this.border.getChildByName(nodeName);
             if (!part){
                 return;
-            } 
+            }
 
             const partTrans = part.getComponent(UITransform)!;
             switch(nodeName) {
@@ -190,6 +223,22 @@ export class BorderHighlight extends Component {
         })
     }
 
+    private sortNodesByArea(nodes: Node[]): Node[] {
+        // 过滤有效节点并计算面积
+        const validNodes = nodes
+            .filter(node => node.getComponent(UITransform))
+            .map(node => ({
+                node,
+                area: node.getComponent(UITransform)!.contentSize.width *
+                      node.getComponent(UITransform)!.contentSize.height
+            }));
+
+        // 按面积降序排序
+        validNodes.sort((a, b) => a.area - b.area);
+
+        // 返回排序后的节点数组
+        return validNodes.map(item => item.node);
+    }
 
     // 递归检测节点
     private checkNodes(node: Node, clickedPos: Vec2, result: Node[]) {
@@ -218,55 +267,40 @@ export class BorderHighlight extends Component {
         result.push(node);
     }
 
-        // 递归禁用指定节点及其子节点的 UI 组件
+    private updateDisableMap(node: Node, component: Component){
+        component.enabled = false;
+        const components = this.disabledMap.get(node);
+        if(components==undefined){
+            const components: Component[] = [component];
+            this.disabledMap.set(node, components);
+            return;
+        }
+        components.push(component);
+
+    }
+
+    // 递归禁用指定节点及其子节点的 UI 组件
     private setDefaultUIEvents(node: Node, enable: boolean) {
-        // 禁用 Button
-        const button = node.getComponent('cc.Button');
-        if (button) {
-            button.enabled = enable;
+        node.children.forEach(child => this.setDefaultUIEvents(child, enable));
+        if (enable) {
+            const components = this.disabledMap.get(node);
+            if (components){
+                components.forEach(c => c.enabled = true);
+            }
+            return;
         }
 
-        // 禁用 Slider
-        const slider = node.getComponent('cc.Slider');
-        if (slider) {
-            slider.enabled = enable;
-        }
+        const componentsToDisable = [
+            "cc.Button", "cc.Slider", "cc.Toggle", "cc.EditBox",
+            "cc.PageView", "cc.ScrollView", "cc.VideoPlayer",
+            "cc.WebView", "cc.BlockInputEvents"
+        ];
 
-        // 禁用 Toggle
-        const toggle = node.getComponent('cc.Toggle');
-        if (toggle) {
-            toggle.enabled = enable;
-        }
-
-        // 禁用 EditBox
-        const editBox = node.getComponent('cc.EditBox');
-        if (editBox) {
-            editBox.enabled = enable;
-        }
-
-        const pageView = node.getComponent('cc.PageView');
-        if (pageView) {
-            pageView.enabled = enable;
-        }
-
-        const scrollView = node.getComponent('cc.ScrollView');
-        if (scrollView) {
-            scrollView.enabled = enable;
-        }
-
-        const videoPlayer = node.getComponent('cc.VideoPlayer');
-        if (videoPlayer) {
-            videoPlayer.enabled = enable;
-        }
-
-        const webView = node.getComponent('cc.WebView');
-        if (webView) {
-            webView.enabled = enable;
-        }
-
-        // 递归处理子节点
-        node.children.forEach(child => {
-            this.setDefaultUIEvents(child, enable);
+        componentsToDisable.forEach(ComponentType => {
+            const component = node.getComponent(ComponentType);
+            if (component) {
+                this.updateDisableMap(node, component);
+            }
         });
     }
 }
