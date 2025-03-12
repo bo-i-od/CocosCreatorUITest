@@ -1,30 +1,42 @@
-import { _decorator, Component, Node, Input, EventMouse, UITransform, Vec3, input, Vec2, EventKeyboard, KeyCode, Rect, Sprite, Color, SpriteFrame, Layers, Texture2D } from 'cc';
-const { ccclass, property } = _decorator;
+import { _decorator, Component, Node, Input, EventMouse, UITransform, Vec3, input, Vec2, EventKeyboard, KeyCode, Rect, Sprite, Color, SpriteFrame, Layers, Texture2D, director, instantiate, find } from 'cc';
+const { ccclass} = _decorator;
 
 @ccclass('BorderHighlight')
 export class BorderHighlight extends Component {
-    @property({ type: Node })
-    public canvas: Node = null!; // 绑定Canvas节点
-    private border: Node = null; // 边框预制体（需提前制作）
+    private borderPrefab: Node = null; // 边框预制体（需提前制作）
+    private border: Node = null;
     private lastHitNodes: Node[] = []; // 上一次点击的节点列表
     private lastHitNode: Node = null; // 上一次点击的节点
     private isInUIMode: boolean = false; //是否可以点击高亮获取UI信息
     private disabledMap: Map<Node, Component[]> = new Map();
+    private disabledSet: Set<Node> = new Set();
+    private canvasName: string = "ui_layer";
 
     onLoad() {
-        this.createBorder();
+        director.addPersistRootNode(this.node);
+        this.createBorderPrefab();
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
     }
 
 
     onDestroy() {
         // 销毁时移除监听
+        this.quitUIMode();
         input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this);
     }
 
-    private createBorder(){
-        this.border = new Node("Border");
-        const borderTrans = this.border.addComponent(UITransform);
+    update() {
+        if(this.isInUIMode){
+            this.setDefaultUIEvents(find(this.canvasName), false);
+        }
+        
+    }
+
+    private createBorderPrefab(){
+        this.borderPrefab = new Node("BorderPrefab");
+        // 标记为常驻根节点（必须为根节点）
+        this.borderPrefab.setParent(this.node);
+        const borderTrans = this.borderPrefab.addComponent(UITransform);
         borderTrans.setAnchorPoint(0.5, 0.5); // 中心锚点
         borderTrans.setContentSize(0, 0);
 
@@ -48,7 +60,7 @@ export class BorderHighlight extends Component {
             const borderPart = new Node(nodeName);
             borderPart.layer = Layers.Enum.UI_2D;
             const borderPartTrans = borderPart.addComponent(UITransform);
-            borderPart.setParent(this.border);
+            borderPart.setParent(this.borderPrefab);
             borderPart.setPosition(0, 0, 0);
             borderPartTrans.setAnchorPoint(0.5, 0.5); // 中心锚点
             const sprite = borderPart.addComponent(Sprite);
@@ -64,39 +76,71 @@ export class BorderHighlight extends Component {
         createBorderPart('BottomBorder');
         createBorderPart('LeftBorder');
         createBorderPart('RightBorder');
-
     }
 
 
 
     private onKeyDown(event: EventKeyboard) {
         // 判断按下的是 R 键
-        if (event.keyCode != KeyCode.KEY_R) {
+        if (event.keyCode == KeyCode.KEY_R) {
+                        // 关闭
+            if(this.isInUIMode){
+                this.quitUIMode();
+                return;
+            }
+            this.enterUIMode();
             return;
         }
+
+        // 切换选框
+        if (event.keyCode == KeyCode.EQUAL){
+            this.changeHitNode(1);
+            return;
+        }
+        if (event.keyCode == KeyCode.DASH){
+            this.changeHitNode(-1);
+            return;
+        }
+
+
+    }
+
+    private changeHitNode(dir: number){
+        if(this.lastHitNodes.length == 0){
+            return;
+        }
+        if(this.lastHitNode == null){
+            return;
+        }
+
+        let currentIndex = this.lastHitNodes.indexOf(this.lastHitNode);
+        if(currentIndex < 0){
+            return;
+        }
+        // 移除旧边框
         this.clearBorder();
-
-        // 关闭
-        if(this.isInUIMode){
-            this.quitUIMode();
-            return;
+        currentIndex += dir;
+        if(currentIndex >= this.lastHitNodes.length){
+            currentIndex = 0;
         }
-        this.enterUIMode();
-
-
-
-
+        else if(currentIndex < 0){
+            currentIndex = this.lastHitNodes.length - 1;
+        }
+        this.lastHitNode = this.lastHitNodes[currentIndex];
+        // 添加新边框
+        this.addBorderToNode(this.lastHitNode);
     }
 
     private enterUIMode(){
         this.isInUIMode = true;
-        this.setDefaultUIEvents(this.canvas, false);
+        this.setDefaultUIEvents(find(this.canvasName), false);
         input.on(Input.EventType.MOUSE_DOWN, this.onMouseClick, this);
     }
 
     private quitUIMode(){
+        this.clearBorder();
         this.isInUIMode = false;
-        this.setDefaultUIEvents(this.canvas, true);
+        this.setDefaultUIEvents(find(this.canvasName), true);
         input.off(Input.EventType.MOUSE_DOWN, this.onMouseClick, this);
     }
 
@@ -120,13 +164,13 @@ export class BorderHighlight extends Component {
         // 获取点击位置（Vec2 转 Vec3）
         const screenPos = event.getLocation();
         const screenPosV3 = new Vec3(screenPos.x, screenPos.y, 0);
-
+        const canvas = find(this.canvasName);
         // 转换为 Canvas 坐标系下的 Vec3
-        const worldPos = this.canvas.getComponent(UITransform)!.convertToNodeSpaceAR(screenPosV3);
+        const worldPos = canvas.getComponent(UITransform)!.convertToNodeSpaceAR(screenPosV3);
         const worldPosV2 = new Vec2(worldPos.x, worldPos.y);
         // 传递给 checkNodes 时保持 Vec3 类型
         let hitNodes: Node[] = [];
-        this.checkNodes(this.canvas, worldPosV2, hitNodes);
+        this.checkNodes(canvas, canvas, worldPosV2, hitNodes);
         hitNodes = this.sortNodesByArea(hitNodes);
 
         // 移除旧边框
@@ -134,6 +178,7 @@ export class BorderHighlight extends Component {
 
         if (hitNodes.length == 0) {
             this.lastHitNode = null;
+            this.lastHitNodes = hitNodes;
             return;
         }
 
@@ -145,6 +190,7 @@ export class BorderHighlight extends Component {
         if(!isSamePosition){
             currentIndex = 0;
         }
+        
         if(currentIndex >= hitNodes.length){
             currentIndex = 0;
         }
@@ -155,19 +201,14 @@ export class BorderHighlight extends Component {
 
         // 添加新边框
         this.addBorderToNode(this.lastHitNode);
-        let elementData = `{"locator": "${this.lastHitNode.getPathInHierarchy()}"`;
-        if(this.lastHitNode.getComponent(UITransform) != null){
-            elementData += `, "focus": (${this.lastHitNode.getComponent(UITransform).anchorX}, ${this.lastHitNode.getComponent(UITransform).anchorY})`;
-        }
-        elementData += `}`;
-        console.log(elementData,"\n",this.lastHitNode.components);
     }
 
     // 添加边框到指定节点
     private addBorderToNode(targetNode: Node) {
         // 改变边框位置
-        this.border.setParent(this.canvas.getChildByName("view"));
-        this.border.setPosition(0, 0, 0);
+        this.border = instantiate(this.borderPrefab);
+        this.border.setParent(targetNode.parent);
+        // this.border.setPosition(0, 0, 0);
         const uiTransform = targetNode.getComponent(UITransform);
         const posX = targetNode.worldPosition.x + (0.5 - uiTransform.anchorX) * uiTransform.contentSize.x;
         const posY = targetNode.worldPosition.y + (0.5 - uiTransform.anchorY) * uiTransform.contentSize.y;
@@ -213,14 +254,21 @@ export class BorderHighlight extends Component {
         updateBorderPart('BottomBorder');
         updateBorderPart('LeftBorder');
         updateBorderPart('RightBorder');
+
+        let elementData = `{"locator": "${this.lastHitNode.getPathInHierarchy()}"`;
+        if(this.lastHitNode.getComponent(UITransform) != null){
+            elementData += `, "focus": (${this.lastHitNode.getComponent(UITransform).anchorX}, ${this.lastHitNode.getComponent(UITransform).anchorY})`;
+        }
+        elementData += `}`;
+        console.log(elementData,"\n",this.lastHitNode.components);
     }
 
     // 清除当前边框
     private clearBorder() {
-        // 将四条边缩放归零
-        this.border.getComponentsInChildren(UITransform).forEach(uiTransform =>{
-            uiTransform.setContentSize(0, 0);
-        })
+        if (this.border) {
+            this.border.destroy();
+        }
+        this.border = null;
     }
 
     private sortNodesByArea(nodes: Node[]): Node[] {
@@ -241,19 +289,20 @@ export class BorderHighlight extends Component {
     }
 
     // 递归检测节点
-    private checkNodes(node: Node, clickedPos: Vec2, result: Node[]) {
-        if (!node.active) return;
+    private checkNodes(node: Node, canvas: Node, clickedPos: Vec2, result: Node[]) {
+        if (!node.activeInHierarchy && !this.disabledSet.has(node)) {
+            return;
+        }
         node.children.forEach(child => {
-            this.checkNodes(child, clickedPos, result); // 传递父节点坐标
+            this.checkNodes(child, canvas, clickedPos, result); // 传递父节点坐标
         });
         const uiTransform = node.getComponent(UITransform);
-        if (!uiTransform) return;
-        if (node == this.canvas){
+        if (!uiTransform) {
             return;
         }
 
         // 转换为节点在 Canvas 坐标系下的位置
-        const worldPos = this.canvas.getComponent(UITransform).convertToNodeSpaceAR(node.worldPosition);
+        const worldPos = canvas.getComponent(UITransform).convertToNodeSpaceAR(node.worldPosition);
         const nodeX = worldPos.x - uiTransform.anchorX  * uiTransform.contentSize.width;
         const nodeY = worldPos.y - uiTransform.anchorY  * uiTransform.contentSize.height;
 
@@ -281,14 +330,24 @@ export class BorderHighlight extends Component {
 
     // 递归禁用指定节点及其子节点的 UI 组件
     private setDefaultUIEvents(node: Node, enable: boolean) {
+        if(node == null){
+            return;
+        }
         node.children.forEach(child => this.setDefaultUIEvents(child, enable));
         if (enable) {
             const components = this.disabledMap.get(node);
             if (components){
                 components.forEach(c => c.enabled = true);
             }
+
+            if(this.disabledSet.has(node)){
+                node.active = true;
+                this.disabledSet.delete(node);
+            }
             return;
         }
+
+
 
         const componentsToDisable = [
             "cc.Button", "cc.Slider", "cc.Toggle", "cc.EditBox",
@@ -302,6 +361,15 @@ export class BorderHighlight extends Component {
                 this.updateDisableMap(node, component);
             }
         });
+
+        const nodeToDisable = ["_InputNode", "_ui_node_proxy"]
+        nodeToDisable.forEach(nodeName => {
+            if(nodeName == node.name){
+                node.active = false;
+                this.disabledSet.add(node);
+            }
+        })
+
     }
 }
 

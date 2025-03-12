@@ -6,7 +6,7 @@ import cv2
 
 from common import rpc_method_request
 from configs.jump_data import JumpData
-from error import *
+from common.error import *
 from tools import common_tools
 import asyncio
 from selenium import webdriver
@@ -14,7 +14,6 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
 
 
 class BasePage:
@@ -859,6 +858,46 @@ class BasePage:
         self.is_single_element(position_list)
         await self.press_position_base(position_list[0], duration=0.1)
         return position_list[0]
+
+    async def click_object_of_plural_objects(self, element_data: dict = None, element_data_list: list = None,
+                                             uuid: str = None, uuid_list: list = None, offspring_path: str = "",
+                                             anchor_point: list = None, locator_camera: str = "", ignore_set=None,
+                                             index=None
+                                             ):
+        """函数功能简述
+            点击一堆物体中的其中一个
+
+        参数:
+            object_id、object_id_list、element_data、element_data_list选择一个输入
+            index: 目标索引
+        输出:
+            int
+        """
+
+        # object_id或element_data转成object_id_list或element_data_list输入
+        if uuid:
+            await self.click_object_of_plural_objects(uuid_list=[uuid], offspring_path=offspring_path,
+                                                      anchor_point=anchor_point, locator_camera=locator_camera,
+                                                      ignore_set=ignore_set, index=index)
+            return
+        if element_data:
+            await self.click_object_of_plural_objects(element_data_list=[element_data], offspring_path=offspring_path,
+                                                      index=index, ignore_set=ignore_set)
+            return
+
+        # 得到位置
+        position_list = await self.get_position_list(element_data_list=element_data_list, uuid_list=uuid_list,
+                                                     offspring_path=offspring_path, anchor_point=anchor_point,
+                                                     locator_camera=locator_camera)
+        position_list = common_tools.merge_list(position_list)
+
+        if index is None:
+            index = random.randint(0, len(position_list) - 1)
+        # 如果index没有赋合法值，就随机点击一个
+        if index < 0:
+            index = len(position_list) + index
+
+        await self.click_position(position=position_list[index], ignore_set=ignore_set)
 
     async def click_element_safe(self, uuid: str = None, element_data: dict = None, offspring_path="",
                                  anchor_point: list = None, locator_camera: str = ""):
