@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Input, EventMouse, UITransform, Vec3, input, Vec2, EventKeyboard, KeyCode, Rect, Sprite, Color, SpriteFrame, Layers, Texture2D, director, instantiate, find } from 'cc';
+import { _decorator, Component, Node, Input, EventMouse, UITransform, Vec3, input, Vec2, EventKeyboard, KeyCode, Rect, Sprite, Color, SpriteFrame, Layers, Texture2D, instantiate, find } from 'cc';
 const { ccclass} = _decorator;
 
 @ccclass('BorderHighlight')
@@ -13,7 +13,6 @@ export class BorderHighlight extends Component {
     private canvasName: string = "ui_layer";
 
     onLoad() {
-        director.addPersistRootNode(this.node);
         this.createBorderPrefab();
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
     }

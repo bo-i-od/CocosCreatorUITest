@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, screen, Camera, CCString } from 'cc';
+import { _decorator, Component, Node, screen, Camera, director } from 'cc';
 import { Locate } from './Locate';
 import { UIData } from './UIData';
 const { ccclass, property } = _decorator;
@@ -20,6 +20,7 @@ export default class WSClient extends Component {
 
 
     onLoad() {
+        director.addPersistRootNode(this.node);
         this.addRpcMethods();
         this.startConnection();
         this.transmitConsole();
