@@ -1,4 +1,4 @@
-import { _decorator, Camera, Component, Node, UITransform, Vec3, screen, Slider, ProgressBar, Label, EditBox, RichText, Toggle, Sprite } from 'cc';
+import { _decorator, Camera, Component, Node, UITransform, Vec3, screen, Slider, ProgressBar, Label, EditBox, RichText, Toggle, Sprite, director, Director} from 'cc';
 const { ccclass, property } = _decorator;
 
 @ccclass('UIData')
@@ -168,6 +168,69 @@ export class UIData {
         }
         return idArray;
     }
+
+    public static async screenShot(x, y, width, height): Promise<[string, string]> {
+
+        return new Promise((resolve, reject) => {
+            // 确保在下一帧渲染后捕获
+            director.once(Director.EVENT_AFTER_DRAW, () => {
+                try {
+                    const canvas = document.getElementById("GameCanvas") as HTMLCanvasElement;
+                    
+                    // 验证canvas有效性
+                    if (!canvas || canvas.width === 0 || canvas.height === 0) {
+                        throw new Error("Canvas not initialized");
+                    }
+                    // 坐标系转换：将中心点转换为左上角起点
+                    let startX = x - width / 2;
+                    let startY = y - height / 2;
+                    
+                    // 边界处理
+                    startX = Math.max(0, Math.min(startX, canvas.width - 1));
+                    startY = Math.max(0, Math.min(startY, canvas.height - 1));
+                    
+                    // 计算实际截取区域
+                    const endX = Math.min(startX + width, canvas.width);
+                    const endY = Math.min(startY + height, canvas.height);
+                    const actualWidth = endX - startX;
+                    const actualHeight = endY - startY;
+
+                    // 创建临时Canvas
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = actualWidth;
+                    tempCanvas.height = actualHeight;
+                    const ctx = tempCanvas.getContext('2d')!;
+
+                    // 九参数绘制解决边界溢出问题
+                    ctx.drawImage(
+                        canvas,
+                        startX, startY,        // 源起点
+                        actualWidth, actualHeight,  // 源尺寸
+                        0, 0,                  // 目标起点
+                        actualWidth, actualHeight  // 目标尺寸
+                    );
+
+    
+                    // 必须配置preserveDrawingBuffer（在引擎初始化时设置）
+                    const dataURL = tempCanvas.toDataURL('image/jpeg');
+                    
+                    // 提取base64数据
+                    const base64Data = dataURL.split(',')[1];
+                    
+                    resolve([base64Data, 'jpg']);
+                } catch (e) {
+                    reject(["", "jpg"]);
+                }
+            });
+    
+            // 强制触发渲染更新
+            director.getScene().renderScene.update(0);
+        });
+    }
+
+
+
+
 
 }
 

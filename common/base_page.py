@@ -1,8 +1,10 @@
+import base64
 import os
 import random
+import zlib
 
 import cv2
-
+import numpy as np
 
 from common import rpc_method_request
 from configs.jump_data import JumpData
@@ -19,8 +21,6 @@ from selenium.webdriver.common.by import By
 class BasePage:
     def __init__(self, server):
         self.server = server
-        self.screen_w = None
-        self.screen_h = None
 
         # 控制截图
         self.is_record = False
@@ -30,6 +30,9 @@ class BasePage:
         self.root_dir = os.path.abspath(os.path.dirname(file_path))
         self.driver = self.webdriver_init()
         self.canvas = self.driver.find_element(By.ID, "GameCanvas")
+        self.screen_w = self.canvas.size['width']
+        self.screen_h = self.canvas.size['height']
+
 
     def webdriver_init(self):
         # "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\temp\chrome_profile"
@@ -768,8 +771,8 @@ class BasePage:
         # 点击前进行截图保存
         if self.is_record:
             img = await self.get_full_screen_shot()
-            self.draw_circle(img, (point_start[0], point_start[1]))
-            self.draw_circle(img, (point_end[0], point_end[1]))
+            self.draw_circle(img, center_coordinates=(point_start[0], point_start[1]))
+            self.draw_circle(img, center_coordinates=(point_end[0], point_end[1]))
             self.save_img(img)
         web_position_start = self.normalized_position_to_web_position(point_start)
         web_position_end = self.normalized_position_to_web_position(point_end)
@@ -1043,8 +1046,6 @@ class BasePage:
         ui_x, ui_y = await self.get_position(element_data=element_data, uuid=uuid, offspring_path=offspring_path,
                                              anchor_point=anchor_point, locator_camera=locator_camera)
         ui_w, ui_h = await self.get_size(element_data=element_data, uuid=uuid, offspring_path=offspring_path)
-        ui_x, ui_y = int(ui_x * self.screen_w), int(ui_y * self.screen_h)
-        ui_w, ui_h = int(ui_w * self.screen_w), int(ui_h * self.screen_h)
         img = await self.get_screen_shot(ui_x, ui_y, ui_w, ui_h)
         return img
 
@@ -1055,7 +1056,7 @@ class BasePage:
         返回值:
             Opencv格式图像
         """
-        img = await self.get_screen_shot(self.screen_w * 0.5, self.screen_h * 0.5, self.screen_w, self.screen_h)
+        img = await self.get_screen_shot(0.5, 0.5, 1, 1)
         return img
 
     async def get_screen_shot(self, x, y, w, h):
@@ -1069,17 +1070,22 @@ class BasePage:
         返回值:
             Opencv格式图像
         """
-        img_b64encode, fmt = await rpc_method_request.screen_shot(self.server, x, y, w, h)
-        # if fmt.endswith('.deflate'):
-        #     # fmt = fmt[:-len('.deflate')]
-        #     imgdata = base64.b64decode(img_b64encode)
-        #     imgdata = zlib.decompress(imgdata)
-        #     img_b64encode = base64.b64encode(imgdata)
-        # img_b64decode = base64.b64decode(img_b64encode)  # base64解码
-        # img_array = np.frombuffer(img_b64decode, np.uint8)  # 转换np序列
-        # img = cv2.imdecode(img_array, cv2.COLOR_BGR2RGB)  # 转换Opencv格式
-        # return img
-        return 1
+        # img = await rpc_method_request.screen_shot(self.server, x, y, w, h)
+        pixel_x = self.screen_w * x
+        pixel_y = self.screen_h * y
+        pixel_w = self.screen_w * w
+        pixel_h = self.screen_h * h
+
+        [img_b64encode, fmt] = await rpc_method_request.screen_shot(self.server, pixel_x, pixel_y, pixel_w, pixel_h)
+        if fmt.endswith('.deflate'):
+            # fmt = fmt[:-len('.deflate')]
+            imgdata = base64.b64decode(img_b64encode)
+            imgdata = zlib.decompress(imgdata)
+            img_b64encode = base64.b64encode(imgdata)
+        img_b64decode = base64.b64decode(img_b64encode)  # base64解码
+        img_array = np.frombuffer(img_b64decode, np.uint8)  # 转换np序列
+        img = cv2.imdecode(img_array, cv2.COLOR_BGR2RGB)  # 转换Opencv格式
+        return img
 
     def save_img(self, img, img_name=""):
         """函数功能简述
@@ -1115,7 +1121,7 @@ class BasePage:
         radius0 = 20
         radius1 = 30
         # 定义圆形的颜色 (B, G, R)
-        color = (0, 0, 255)
+        color = (0, 255, 0)
         # 定义圆形的厚度; -1表示圆形将会被填充，默认值是1
         thickness = 2
         # 在图片上画一个圆形

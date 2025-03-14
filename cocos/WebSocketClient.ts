@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, screen, Camera, director } from 'cc';
+import { _decorator, Component, Node, screen, Camera, CCString, ImageAsset, director, Director } from 'cc';
 import { Locate } from './Locate';
 import { UIData } from './UIData';
 const { ccclass, property } = _decorator;
@@ -20,7 +20,6 @@ export default class WSClient extends Component {
 
 
     onLoad() {
-        director.addPersistRootNode(this.node);
         this.addRpcMethods();
         this.startConnection();
         this.transmitConsole();
@@ -50,6 +49,7 @@ export default class WSClient extends Component {
         this.registerRpcHandler("getParentIDByID", this.getParentIDByID.bind(this));
         this.registerRpcHandler("command", this.command.bind(this));
         this.registerRpcHandler("customCommand", this.customCommand.bind(this));
+        this.registerRpcHandler("screenShot", this.screenShot.bind(this));
     }
 
     // 获取分辨率
@@ -426,6 +426,15 @@ export default class WSClient extends Component {
             this.cameraDefault = component;
         }
     }
+    
+
+    private async screenShot(params): Promise<[string, string]> {
+        const x: number = params[0];
+        const y: number = params[1];
+        const width: number = params[2];
+        const height: number = params[3];
+        return await UIData.screenShot(x, y, width, height);
+    }
 
     startConnection() {
         this.cleanup();
@@ -437,8 +446,8 @@ export default class WSClient extends Component {
             // this.socket.send("<----TypeScript->Python---->已连接");
         };
 
-        this.socket.onmessage = (msg) => {
-            let response = this.handleMessage(msg);
+        this.socket.onmessage = async (msg) => {
+            let response = await this.handleMessage(msg);
             this.socket.send(response);
         };
 
@@ -452,7 +461,7 @@ export default class WSClient extends Component {
         };
     }
 
-    private handleMessage(msg){
+    private async handleMessage(msg){
         let method: string;
         let idAction: number;
         let params = {};
@@ -476,7 +485,7 @@ export default class WSClient extends Component {
 
         let result = null;
         try{
-            result = this.rpcHandlers[method](params);
+            result = await this.rpcHandlers[method](params);
         }
         catch(err){
             console.log(err);
@@ -506,9 +515,10 @@ export default class WSClient extends Component {
     private cleanup() {
         if (this.socket) {
             this.socket.close();
-            this.unscheduleAllCallbacks();
+            this.socket = null;
             clearTimeout(this.reconnectTimer);
         }
+        this.unscheduleAllCallbacks();
     }
 
 
