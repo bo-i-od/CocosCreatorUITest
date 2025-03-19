@@ -20,6 +20,7 @@ export default class WSClient extends Component {
 
 
     onLoad() {
+        director.addPersistRootNode(this.node);
         this.addRpcMethods();
         this.startConnection();
         this.transmitConsole();
